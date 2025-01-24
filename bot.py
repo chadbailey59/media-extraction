@@ -80,7 +80,6 @@ async def main():
                 audio_in_enabled=True,
                 audio_in_sample_rate=16000,
                 camera_out_enabled=False,
-                transcription_enabled=True,
             ),
         )
 
