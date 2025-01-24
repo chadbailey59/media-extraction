@@ -35,17 +35,34 @@ logger.add(sys.stderr, level="DEBUG")
 
 
 class AudioProcessor(FrameProcessor):
+    def __init__(self):
+        super().__init__()
+        self.audio_buffer = []
+        self.sample_rate = None
+        self.num_channels = None
+
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
         if isinstance(frame, InputAudioRawFrame):
-            # TODO: Separate by participant, or use mixer to combine
-            await self.push_frame(
-                OutputAudioRawFrame(
-                    audio=frame.audio,
-                    sample_rate=frame.sample_rate,
-                    num_channels=frame.num_channels,
+            # Store frame audio and metadata
+            self.audio_buffer.append(frame.audio)
+            self.sample_rate = frame.sample_rate
+            self.num_channels = frame.num_channels
+
+            # Once we have 100 frames, combine and output
+            # this is for smooth audio playback on the other end
+            # for writing to file, chunks can be smaller
+            if len(self.audio_buffer) >= 100:
+                combined_audio = b"".join(self.audio_buffer)
+                await self.push_frame(
+                    OutputAudioRawFrame(
+                        audio=combined_audio,
+                        sample_rate=self.sample_rate,
+                        num_channels=self.num_channels,
+                    )
                 )
-            )
+                # Clear buffer after sending
+                self.audio_buffer = []
         else:
             await self.push_frame(frame)
 

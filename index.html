@@ -82,6 +82,7 @@
 
       function handleWebSocketMessage(event) {
           const arrayBuffer = event.data;
+          console.log("got audio data")
           if (isPlaying) {
               enqueueAudioFromProto(arrayBuffer);
           }
