@@ -17,7 +17,8 @@ async def configure(aiohttp_session: aiohttp.ClientSession):
 
 
 async def configure_with_args(
-    aiohttp_session: aiohttp.ClientSession, parser: argparse.ArgumentParser | None = None
+    aiohttp_session: aiohttp.ClientSession,
+    parser: argparse.ArgumentParser | None = None,
 ):
     if not parser:
         parser = argparse.ArgumentParser(description="Daily AI SDK Bot Sample")
@@ -34,7 +35,7 @@ async def configure_with_args(
 
     args, unknown = parser.parse_known_args()
 
-    url = args.url or os.getenv("DAILY_SAMPLE_ROOM_URL")
+    url = args.url or os.getenv("DAILY_ROOM_URL")
     key = args.apikey or os.getenv("DAILY_API_KEY")
 
     if not url:

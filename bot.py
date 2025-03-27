@@ -19,32 +19,31 @@ from pipecat.frames.frames import (
 )
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
-from pipecat.pipeline.task import PipelineTask, PipelineParams
+from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.transports.services.daily import DailyParams, DailyTransport
 from pipecatcloud.agent import DailySessionArguments
 from pydub import AudioSegment
 
-from runner import configure
-
 load_dotenv(override=True)
 
 
 class AudioProcessor(FrameProcessor):
-    def __init__(self):
+    def __init__(self, websocket_url):
         super().__init__()
         self.audio_buffer = []
         self.sample_rate = None
         self.num_channels = None
         self.websocket = None
+        self.websocket_url = websocket_url
 
-    async def connect_websocket(self, url: str):
-        self.websocket = await websockets.connect(url)
+    async def connect_websocket(self):
+        self.websocket = await websockets.connect(self.websocket_url)
 
     async def __aenter__(self):
         await super().__aenter__()
         # Connect to WebSocket server when processor starts
-        await self.connect_websocket("ws://localhost:8765")
+        await self.connect_websocket()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -61,6 +60,7 @@ class AudioProcessor(FrameProcessor):
             self.num_channels = frame.num_channels
 
             # Once we have 100 frames, combine and output
+            # TODO: Separate audio using VAD frames instead
             if len(self.audio_buffer) >= 100:
                 combined_audio = b"".join(self.audio_buffer)
                 # Convert raw audio to AudioSegment
@@ -81,8 +81,11 @@ class AudioProcessor(FrameProcessor):
                 # Send AAC audio through WebSocket if connected
                 if not self.websocket:
                     try:
-                        await self.connect_websocket("ws://localhost:8765")
-                    except (websockets.exceptions.WebSocketException, ConnectionRefusedError) as e:
+                        await self.connect_websocket()
+                    except (
+                        websockets.exceptions.WebSocketException,
+                        ConnectionRefusedError,
+                    ) as e:
                         logger.error(f"Failed to connect to WebSocket server: {e}")
                 if self.websocket:
                     logger.info(
@@ -94,9 +97,14 @@ class AudioProcessor(FrameProcessor):
                         logger.error(f"WebSocket error: {e}")
                         # Attempt to reconnect
                         try:
-                            await self.connect_websocket("ws://localhost:8765")
-                        except (websockets.exceptions.WebSocketException, ConnectionRefusedError) as e:
-                            logger.error(f"Failed to reconnect to WebSocket server: {e}")
+                            await self.connect_websocket()
+                        except (
+                            websockets.exceptions.WebSocketException,
+                            ConnectionRefusedError,
+                        ) as e:
+                            logger.error(
+                                f"Failed to reconnect to WebSocket server: {e}"
+                            )
 
                 # Clear buffer after sending
                 self.audio_buffer = []
@@ -105,12 +113,14 @@ class AudioProcessor(FrameProcessor):
 
 
 async def main(args):
+    logger.info(f"Starting bot session with args: {args}")
     async with aiohttp.ClientSession() as session:
-        (room_url, token) = await configure(session)
+        # (room_url, token) = await configure(session)
 
         daily_transport = DailyTransport(
-            room_url,
-            token,
+            args.body["daily_room_url"],
+            # TODO: Token should be optional
+            None,
             "Chatbot",
             DailyParams(
                 audio_out_enabled=True,
@@ -120,7 +130,7 @@ async def main(args):
             ),
         )
 
-        audio_processor = AudioProcessor()
+        audio_processor = AudioProcessor(args.body["websocket_url"])
 
         # the websocket transport input is what runs the server
         pipeline = Pipeline(
@@ -130,7 +140,7 @@ async def main(args):
             ]
         )
 
-        task = PipelineTask(pipeline, PipelineParams(allow_interruptions=True))
+        task = PipelineTask(pipeline, params=PipelineParams(allow_interruptions=True))
 
         @daily_transport.event_handler("on_participant_left")
         async def on_participant_left(transport, participant, reason):
@@ -179,10 +189,11 @@ async def local_main():
     logger.warning("_")
     logger.warning("_")
     args = DailySessionArguments(
-        room_url=room_url,
+        # ensure we're using the room name from the request body
+        room_url=None,
         token=None,
         session_id=None,
-        body={},
+        body={"websocket_url": os.getenv("WEBSOCKET_URL"), "daily_room_url": room_url},
     )
     # webbrowser.open(room_url)
     await main(args)
