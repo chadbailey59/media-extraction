@@ -67,7 +67,8 @@ class AudioProcessor(FrameProcessor):
             await self.push_frame(frame)
 
 
-async def main():
+async def main(args):
+    connect_to(args.websocket_url)
     async with aiohttp.ClientSession() as session:
         (room_url, token) = await configure(session)
 
