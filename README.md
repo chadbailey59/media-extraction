@@ -11,6 +11,8 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+You'll also need `ffmpeg` installed, and possibly some other dependencies for Windows systems.
+
 Then, edit .env and add your Daily API key. This enables the demo to create a room token for you, which isn't strictly necessary for now, but is useful if you want to enable transcription, for example. Go ahead and set DAILY_ROOM_URL to one of your test rooms.
 
 To run the demo locally, you'll need two terminal tabs:
